@@ -2,18 +2,24 @@ const express = require("express");
 const http = require("http");
 const { config } = require("dotenv");
 const cors = require("cors");
-const { fetchAppointmentsByEmail, fetchAllPatients,
-  fetchSOAPByAppointment, fetchBillingByAppointment,
-  fetchSummaryByAppointment, fetchTranscriptByAppointment,
-  fetchReccomendationByAppointment,
-  patchBillingByAppointment,
-  fetchClustersByAppointment,
-  insertCallHistory, 
-  fetchEmailFromCallHistory} = require("./cosmosClient");
+const {
+  fetchEmailFromCallHistory,
+  updateCallHistory
+} = require("./services/callHistoryService");
 const { StreamClient } = require("@stream-io/node-sdk");
 const { storageContainerClient, upload } = require("./blobClient");
 const { sendMessage } = require("./serviceBusClient");
 const { default: axios } = require("axios");
+const appointmentsRouter = require("./routes/appointments");
+const patientsRouter = require("./routes/patients");
+const soapRouter = require("./routes/soap");
+const billingRouter = require("./routes/billing");
+const summaryRouter = require("./routes/summary");
+const summaryOfSummaryRouter = require("./routes/summaryOfSummary");
+const transcriptRouter = require("./routes/transcript");
+const recommendationRouter = require("./routes/recommendation");
+const clustersRouter = require("./routes/clusters");
+const callHistoryRouter = require("./routes/callHistory");
 
 config();
 
@@ -35,144 +41,21 @@ app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
-app.get("/api/appointments/:email", async (req, res) => {
-  try {
-    const { email } = req.params
-    const items = await fetchAppointmentsByEmail(email);
-    res.json(items);
-  } catch (err) {
-    // console.error("Error fetching items:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-app.get("/api/patients", async (req, res) => {
-  try {
-    const items = await fetchAllPatients();
-    res.json(items);
-  } catch (err) {
-    // console.error("Error fetching items:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-app.get("/api/soap/:id", async (req, res) => {
-  const { id } = req.params;
-  const partitionKey = req.query.userID;
-
-  if (!partitionKey) {
-    return res.status(400).json({ error: "partitionKey query param is required" });
-  }
-
-  try {
-    const item = await fetchSOAPByAppointment(id, partitionKey);
-    res.json(item);
-  } catch (err) {
-    console.error("Error fetching item:", err);
-    res.status(404).json({ error: "Item not found" });
-  }
-});
-
-app.get("/api/billing/:id", async (req, res) => {
-  const { id } = req.params;
-  const partitionKey = req.query.userID;
-
-  if (!partitionKey) {
-    return res.status(400).json({ error: "partitionKey query param is required" });
-  }
-
-  try {
-    const item = await fetchBillingByAppointment(id, partitionKey);
-    res.json(item);
-  } catch (err) {
-    console.error("Error fetching item:", err);
-    res.status(404).json({ error: "Item not found" });
-  }
-});
-
-app.patch("/api/billing/:id", async (req, res) => {
-  try {
-    const { id } = req.params
-    await patchBillingByAppointment(id, req.query.username, req.body.billing_codes)
-    res.status(200).json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: "Failed to send message to queue" })
-  }
-});
-
-app.get("/api/clusters/:id", async (req, res) => {
-  const { id } = req.params;
-  const partitionKey = req.query.username;
-
-  if (!partitionKey) {
-    return res.status(400).json({ error: "partitionKey query param is required" });
-  }
-
-  try {
-    const item = await fetchClustersByAppointment(id, partitionKey);
-    res.json(item);
-  } catch (err) {
-    console.error("Error fetching item:", err);
-    res.status(404).json({ error: "Item not found" });
-  }
-});
-
-app.get("/api/summary/:id", async (req, res) => {
-  const { id } = req.params;
-  const partitionKey = req.query.userID;
-
-  if (!partitionKey) {
-    return res.status(400).json({ error: "partitionKey query param is required" });
-  }
-
-  try {
-    const item = await fetchSummaryByAppointment(id, partitionKey);
-    res.json(item);
-  } catch (err) {
-    console.error("Error fetching item:", err);
-    res.status(404).json({ error: "Item not found" });
-  }
-});
-
-app.get("/api/transcript/:id", async (req, res) => {
-  const { id } = req.params;
-  const partitionKey = req.query.userID;
-
-  if (!partitionKey) {
-    return res.status(400).json({ error: "partitionKey query param is required" });
-  }
-
-  try {
-    const item = await fetchTranscriptByAppointment(id, partitionKey);
-    res.json(item);
-  } catch (err) {
-    console.error("Error fetching item:", err);
-    res.status(404).json({ error: "Item not found" });
-  }
-});
-
-app.get("/api/recommendations/:id", async (req, res) => {
-  const { id } = req.params;
-  const partitionKey = req.query.userID;
-
-  if (!partitionKey) {
-    return res.status(400).json({ error: "partitionKey query param is required" });
-  }
-
-  try {
-    const item = await fetchReccomendationByAppointment(id, partitionKey);
-    res.json(item);
-  } catch (err) {
-    console.error("Error fetching item:", err);
-    res.status(404).json({ error: "Item not found" });
-  }
-});
+app.use("/api/appointments", appointmentsRouter);
+app.use("/api/patients", patientsRouter);
+app.use("/api/soap-notes", soapRouter);
+app.use("/api/billing", billingRouter);
+app.use("/api/summary-of-summary", summaryOfSummaryRouter);
+app.use("/api/summary", summaryRouter);
+app.use("/api/transcript", transcriptRouter);
+app.use("/api/recommendations", recommendationRouter);
+app.use("/api/clusters", clustersRouter);
+app.use("/api/call-history", callHistoryRouter);
 
 app.post("/get-token", async (req, res) => {
 
   const { userId } = req.body;
   const client = new StreamClient(process.env.STREAM_IO_APIKEY, process.env.STREAM_IO_SECRET);
-
   if (!userId) {
     return res.status(400).json({ error: "Missing userId" });
   }
@@ -222,64 +105,23 @@ app.post("/api/end-call/:appointmentId", async (req, res) => {
 
 });
 
-
-app.get("/api/call-history/:userID", async (req, res) => {
-  const { userID } = req.params
-  const { limit: fetchHistoryLimit } = req.query
-  const client = new StreamClient(process.env.STREAM_IO_APIKEY, process.env.STREAM_IO_SECRET);
-
-  const data = await client.video.queryCalls({
-    filter_conditions: {
-      created_by_user_id: userID
-    },
-    limit: Number(fetchHistoryLimit) || 10
-  })
-  const call = await client.video.getCall({
-    id: data.calls[0].call.id,
-    type: "default"
-  })
-  console.log(call);
-
-  return res.status(200).json(data)
-})
-
-app.post("/api/call-history/:id", async (req, res) => {
-  const { id } = req.params
-  const reqBody = req.body
-  let errorMsg = ""  
-  try {
-    if (!reqBody.userID) {
-      errorMsg= "UserID is mandatory"
-    }
-    await insertCallHistory(id, reqBody)
-    res.status(200).json({ success: true })
-  } catch (error) {
-    res.status(500).json({ error: errorMsg || "Failed to Insert into DB" })
-  }
-
-})
-
 app.post("/webhook", async (req, res) => {
   const { type } = req.body;
   if (type === 'call.recording_ready') {
-    console.log(req.body);
     const { call_cid } = req.body
     const { url: videoUrl, filename } = req.body.call_recording;
 
     try {
       const response = await axios.get(videoUrl, { responseType: 'arraybuffer' });
       const buffer = Buffer.from(response.data);
-      const client = new StreamClient(process.env.STREAM_IO_APIKEY, process.env.STREAM_IO_SECRET);
       const apptID = call_cid.split(":")[1]
-      const call = await client.video.getCall({
-        id: apptID,
-        type: "default"
-      })
+      console.log("call.recording_ready :: Fetched Appointment ID from call history :: " + apptID);
       const username = await fetchEmailFromCallHistory(apptID)
+      console.log("call.recording_ready :: Fetched username from call history :: " + username);
       const meetingChunks = filename.split("_")
       const meetingChunkName = meetingChunks[meetingChunks.length - 1]
+      console.log("call.recording_ready :: Meeting chunkname :: " + meetingChunkName);
       const blobName = `${username}/${apptID}/meeting_part${meetingChunkName}`;
-      console.log(call.call.created_by.name);
       const blobClient = storageContainerClient.getBlockBlobClient(blobName);
       await blobClient.uploadData(buffer, {
         blobHTTPHeaders: {
@@ -292,6 +134,55 @@ app.post("/webhook", async (req, res) => {
       return res.status(500).json({ "message": "Uploaded the blob failed" });
 
     }
+  }
+  if (type === "call.session_ended") {
+    console.log(`Call Session ended`);
+    const { call_cid, session_id, created_at } = req.body
+    const apptID = call_cid.split(":")[1]
+    const client = new StreamClient(process.env.STREAM_IO_APIKEY, process.env.STREAM_IO_SECRET);
+    const call = await client.video.getCall({
+      id: apptID,
+      type: "default"
+    })
+    updateCallHistory(session_id, {
+      endTime: created_at,
+    })
+
+    if (call.members.length == 0) {
+      client.video.endCall({
+        id: apptID,
+        type: "default"
+      })
+    }
+    return res.status(200).json({ "success": "Call Session ended" });
+  }
+  if (type === "call.session_participant_left") {
+    console.log(`Call Session participant left`);
+    console.log(req.body);
+    const { call_cid, created_at, session_id } = req.body
+    const apptID = call_cid.split(":")[1]
+    const userID = await fetchEmailFromCallHistory(apptID)
+    console.log("call.session_participant_left :: Particpant details as below");
+    const participant = req.body.participant;
+    console.log(participant);
+    if (participant.user.name === userID) {
+      const client = new StreamClient(process.env.STREAM_IO_APIKEY, process.env.STREAM_IO_SECRET);
+      updateCallHistory(session_id, {
+        endTime: created_at,
+      })
+
+      client.video.endCall({
+        id: apptID,
+        type: "default"
+      })
+    }
+
+    return res.status(200).json({ "success": "Call session participant left" });
+  }
+  if (type === "call.ended") {
+    console.log(`call.ended :: Appointment ID :: ${req.body.call_cid}`);
+    console.log(req.body);
+    return res.status(200).json({ "success": "Call ended" });
   }
 
   // res.sendStatus(204); // ignored
