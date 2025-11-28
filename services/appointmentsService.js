@@ -1,5 +1,8 @@
 const { CosmosClient } = require("@azure/cosmos");
+const { BlobServiceClient } = require("@azure/storage-blob");
 const crypto = require("crypto");
+const { start } = require("repl");
+const { blob } = require("stream/consumers");
 require("dotenv").config();
 
 const endpoint = process.env.COSMOS_ENDPOINT;
@@ -117,7 +120,7 @@ async function createAppointment(userId, data) {
   const currentDate = new Date().toISOString().slice(0, 10);
 
   const patientId = Number(data.patient_id);
-  const doctorId = generateDoctorId(normalizedDoctorEmail); //  Always proper 32-char format
+  const doctorId = data.doctor_id;
 
   const newAppointment = {
     id: generateId(24),
@@ -169,4 +172,126 @@ async function createAppointment(userId, data) {
   }
 }
 
-module.exports = { fetchAppointmentsByEmail, fetchAppointmentsByEmails, createAppointment };
+const createBulkAppointments = async (file, data) => {
+  const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.RECORDINGS_BLOB_CONNECTION_STRING);
+  const containerClient = blobServiceClient.getContainerClient("seismic-appointment-uploads");
+  const blobName = `${Date.now()}-${file.originalname}`;
+  const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+  try {
+    await blockBlobClient.uploadData(file.buffer);
+    const resource  = await startJob({
+      "env": "dev",
+      "file_name": blobName,
+      "doctor_name": data.doctor_name,
+      "doctor_email": data.userId,
+      "specialization": data.specialization,
+      "practice_id": data.practice_id,
+      "doctor_id": data.doctor_id
+    });
+    return { message: "File uploaded successfully", fileName : blobName, fileUrl: blockBlobClient.url, resource };
+  } catch (error) {
+    console.error("Error uploading bulk appointments file:", error);
+    throw error;
+  }
+};
+
+const getToken = async () => {
+  try{
+    const url = `https://login.microsoftonline.com/${process.env.TENANT_ID}/oauth2/token`;
+    const params = new URLSearchParams();
+    params.append("client_id", process.env.CLIENT_ID);
+    params.append("client_secret", process.env.CLIENT_SECRET);
+    params.append("grant_type", "client_credentials");
+    params.append("resource", "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d");
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+      body: params
+    });
+    const data = await response.json();
+    return data.access_token;
+  }catch (err){
+    console.error("error: ", err);
+    throw err;
+  }
+}
+
+const startJob = async(data) => {
+  try{
+    const response = await fetch(`${process.env.DATABRICKS_WORKSPACE_URL}/api/2.1/jobs/run-now`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await getToken()}`,
+          'content-type': 'application/json'
+        },
+        body : JSON.stringify({
+            "job_id" : process.env.JOB_ID,
+            "notebook_params" : data
+          }
+        )
+      }
+    )
+    const result = await response.json();
+    return result;   
+  }catch(err){
+    console.error("error starting job: ", err);
+    throw err;
+  }
+}
+
+const deleteAppointment = async (user_id, appointmentId) => {
+  const database = client.database(databaseId);
+  const container = database.container("seismic_appointments");
+  const normalizedDoctorEmail = (user_id || '').toLowerCase();
+  try{
+    const today = new Date().toISOString().slice(0, 10);
+    const quesry = {
+      query: `SELECT * FROM c WHERE c.id = @id`,
+      parameters: [{ name: "@id", value: today }]
+    };
+    const { resources: results } = await container.items.query(quesry).fetchAll();
+    if(results.length === 0){
+      throw new Error("No appointments found for today");
+    }
+    const todaysAppointments = results[0].data;
+    const filteredAppointments = todaysAppointments.filter(app => !(app.id === appointmentId && app.doctor_email === normalizedDoctorEmail));
+    await container.items.upsert({ id: today, data: filteredAppointments });
+  }catch(err){
+    console.error("error deleting appointment: ", err);
+    throw err;
+  }
+};
+
+const updateAppointment = async (user_id, appointmentId, updatedData) => {
+  const database = client.database(databaseId);
+  const container = database.container("seismic_appointments");
+  const normalizedDoctorEmail = (user_id || '').toLowerCase();
+  try{
+    const today = new Date().toISOString().slice(0, 10);
+    const quesry = {
+      query: `SELECT * FROM c WHERE c.id = @id`,
+      parameters: [{ name: "@id", value: today }]
+    };
+    const { resources: results } = await container.items.query(quesry).fetchAll();
+    if(results.length === 0){
+      throw new Error("No appointments found for today");
+    }
+    const todaysAppointments = results[0].data;
+    const updatedAppointments = todaysAppointments.map(app => {
+      if(app.id === appointmentId && app.doctor_email === normalizedDoctorEmail){
+        return { ...app, ...updatedData };
+      }
+      return app;
+    });
+    await container.items.upsert({ id: today, data: updatedAppointments });
+  }catch(err){
+    console.error("error updating appointment: ", err);
+    throw err;
+  }
+}
+
+
+module.exports = { fetchAppointmentsByEmail, fetchAppointmentsByEmails, createAppointment, createBulkAppointments, deleteAppointment, updateAppointment };
