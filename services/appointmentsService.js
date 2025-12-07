@@ -3,6 +3,7 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 const crypto = require("crypto");
 const { start } = require("repl");
 const { blob } = require("stream/consumers");
+const { createPatientBoth } = require("./patientsService");
 require("dotenv").config();
 
 const endpoint = process.env.COSMOS_ENDPOINT;
@@ -117,8 +118,7 @@ async function createAppointment(userId, data) {
   const database = client.database(databaseId);
   const container = database.container("seismic_appointments");
   const normalizedDoctorEmail = (userId || '').toLowerCase();
-  const currentDate = new Date().toISOString().slice(0, 10);
-
+  const date = data.appointment_date;
   const patientId = Number(data.patient_id);
   const doctorId = data.doctor_id;
 
@@ -143,7 +143,9 @@ async function createAppointment(userId, data) {
     practice_id: "12345",
     insurance_verified: data.insurance_verified || false,
     insurance_provider: data.insurance_provider,
-    appointment_date: data.appointment_date
+    appointment_date: data.appointment_date,
+    ehr: data.ehr,
+    mrn: data.mrn
   };
 
   try {
@@ -151,7 +153,7 @@ async function createAppointment(userId, data) {
     try {
       const query = {
         query: `SELECT * FROM c WHERE c.id = @id`,
-        parameters: [{ name: "@id", value: currentDate }]
+        parameters: [{ name: "@id", value: date }]
       };
       const { resources: results } = await container.items.query(query).fetchAll();
       existingAppointments = results ? results[0].data : null;
@@ -164,7 +166,7 @@ async function createAppointment(userId, data) {
       ? [...existingAppointments, newAppointment]
       : [newAppointment];
 
-    const { resource: createdItem } = await container.items.upsert({ id: currentDate, data: updatedData });
+    const { resource: createdItem } = await container.items.upsert({ id: date, data: updatedData });
     return createdItem;
   } catch (error) {
     console.error("Error creating custom appointment:", error);
@@ -242,12 +244,12 @@ const startJob = async(data) => {
   }
 }
 
-const deleteAppointment = async (user_id, appointmentId) => {
+const deleteAppointment = async (user_id, appointmentId, date) => {
   const database = client.database(databaseId);
   const container = database.container("seismic_appointments");
   const normalizedDoctorEmail = (user_id || '').toLowerCase();
   try{
-    const today = new Date().toISOString().slice(0, 10);
+    const today = date || new Date().toISOString().slice(0, 10);
     const quesry = {
       query: `SELECT * FROM c WHERE c.id = @id`,
       parameters: [{ name: "@id", value: today }]
@@ -269,11 +271,11 @@ const updateAppointment = async (user_id, appointmentId, updatedData) => {
   const database = client.database(databaseId);
   const container = database.container("seismic_appointments");
   const normalizedDoctorEmail = (user_id || '').toLowerCase();
+  const date = updatedData.appointment_date;
   try{
-    const today = new Date().toISOString().slice(0, 10);
     const quesry = {
       query: `SELECT * FROM c WHERE c.id = @id`,
-      parameters: [{ name: "@id", value: today }]
+      parameters: [{ name: "@id", value: date }]
     };
     const { resources: results } = await container.items.query(quesry).fetchAll();
     if(results.length === 0){
@@ -286,12 +288,61 @@ const updateAppointment = async (user_id, appointmentId, updatedData) => {
       }
       return app;
     });
-    await container.items.upsert({ id: today, data: updatedAppointments });
+    const {resource: updatedItem} = await container.items.upsert({ id: date, data: updatedAppointments });
+    const appointment = updatedAppointments.find(app => app.id === appointmentId && app.doctor_email === normalizedDoctorEmail);
+    const updatedPatient = await createPatientBoth({
+      first_name: appointment.first_name,
+      middle_name: appointment.middle_name,
+      last_name: appointment.last_name,
+      dob: appointment.dob,
+      gender: appointment.gender,
+      email: appointment.email?.toLowerCase().trim(),
+      phone: appointment.phone?.replace(/\D/g, ""),
+      ehr: appointment.ehr,
+      mrn: appointment.mrn,
+    });
+    return updatedItem;
   }catch(err){
     console.error("error updating appointment: ", err);
     throw err;
   }
 }
 
+const cancelAppointment = async(userId, appId, reason, date) => {
+  const database = client.database(databaseId);
+  const container = database.container("seismic_appointments");
+  const normalizedDoctorEmail = (userId || '').toLowerCase();
+  const today = date;
+  try {
+    const quesry = {
+      query: `SELECT * FROM c WHERE c.id = @id`,
+      parameters: [{ name: "@id", value: today }]
+    };
+    const { resources: results } = await container.items.query(quesry).fetchAll();
+    if(results.length === 0){
+      throw new Error("No appointments found for today");
+    }
+    const todaysAppointments = results[0].data;
+    const appointment = todaysAppointments.find(app => app.id === appId && app.doctor_email === normalizedDoctorEmail);
+    const updatedAppointment = {
+      ...appointment,
+      status : "cancelled",
+      cancelled_at: new Date().toISOString().slice(0, 10),
+      cancelled_by : userId,
+      cancelled_reason: reason
+    }
+    const updatedAppointments = todaysAppointments.map(app => {
+      if(app.id === appId && app.doctor_email === normalizedDoctorEmail){
+        return updatedAppointment;
+      }
+      return app;
+    });
+    await container.items.upsert({ id: today, data: updatedAppointments });
+  } catch (err) {
+    console.error("error cancelling appointment: ", err);
+    throw err;
+  }
+}
 
-module.exports = { fetchAppointmentsByEmail, fetchAppointmentsByEmails, createAppointment, createBulkAppointments, deleteAppointment, updateAppointment };
+
+module.exports = { cancelAppointment, fetchAppointmentsByEmail, fetchAppointmentsByEmails, createAppointment, createBulkAppointments, deleteAppointment, updateAppointment };
