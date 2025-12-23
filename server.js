@@ -22,8 +22,6 @@ const clustersRouter = require("./routes/clusters");
 const callHistoryRouter = require("./routes/callHistory");
 const doctorNotesRouter = require("./routes/doctorNotes");
 const emotionalConnectRouter = require("./routes/emotionalConnect");
-const postCallFeedbackRouter = require("./routes/postCallFeedback");
-const upToDateRouter = require("./routes/upToDate");
 
 config();
 
@@ -57,8 +55,6 @@ app.use("/api/clusters", clustersRouter);
 app.use("/api/call-history", callHistoryRouter);
 app.use("/api/doctor-notes", doctorNotesRouter);
 app.use("/api/emotional-connect", emotionalConnectRouter);
-app.use("/api/post-call-feedback", postCallFeedbackRouter);
-app.use("/api/uptodate", upToDateRouter);
 
 app.post("/get-token", async (req, res) => {
 
