@@ -22,6 +22,9 @@ const clustersRouter = require("./routes/clusters");
 const callHistoryRouter = require("./routes/callHistory");
 const doctorNotesRouter = require("./routes/doctorNotes");
 const emotionalConnectRouter = require("./routes/emotionalConnect");
+const postCallFeedbackRouter = require("./routes/postCallFeedback");
+const standaloneRouter = require("./routes/standalone");
+const npiRouter = require("./routes/npi");
 
 config();
 
@@ -55,6 +58,11 @@ app.use("/api/clusters", clustersRouter);
 app.use("/api/call-history", callHistoryRouter);
 app.use("/api/doctor-notes", doctorNotesRouter);
 app.use("/api/emotional-connect", emotionalConnectRouter);
+app.use("/api/post-call-feedback", postCallFeedbackRouter);
+
+
+app.use("/api/standalone", standaloneRouter);
+app.use("/api/verify-npi",npiRouter)
 
 app.post("/get-token", async (req, res) => {
 
