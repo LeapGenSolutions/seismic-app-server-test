@@ -116,6 +116,59 @@ async function fetchAppointmentsByEmails(emails) {
   }
 }
 
+async function fetchAppointmentsByClinic(clinicName) {
+  if (!clinicName) return [];
+  const database = client.database(databaseId);
+  const seismic_appointments_container = database.container("seismic_appointments");
+  const normalizedClinic = clinicName.trim().toLowerCase();
+
+  try {
+    const seismicQuery = {
+      query: `SELECT 
+                  c.id AS appointment_date,
+                  d.id,
+                  d.type,
+                  d.first_name,
+                  d.last_name,
+                  d.middle_name,
+                  d.full_name,
+                  d.dob,
+                  d.gender,
+                  d.mrn,
+                  d.ehr,
+                  d.ssn,
+                  d.doctor_name,
+                  d.doctor_id,
+                  lower(d.doctor_email) as doctor_email,
+                  d.specialization,
+                  d.time,
+                  d.status,
+                  d.insurance_provider,
+                  d.email,
+                  d.phone,
+                  d.insurance_verified,
+                  d.patient_id,
+                  d.practice_id,
+                  d.clinicName
+              FROM c
+              JOIN d IN c.data 
+              WHERE 
+                LOWER(d.clinicName) = @clinicName 
+                OR LOWER(d.details.clinicName) = @clinicName 
+                OR LOWER(d.original_json.clinicName) = @clinicName
+                OR LOWER(d.original_json.details.clinicName) = @clinicName`,
+      parameters: [{ name: "@clinicName", value: normalizedClinic }]
+    };
+
+    const { resources: items } = await seismic_appointments_container.items.query(seismicQuery).fetchAll();
+    console.log(`DEBUG: Found ${items.length} appointments for clinic "${normalizedClinic}"`);
+    return items;
+  } catch (error) {
+    console.error("Error fetching appointments by clinic:", error);
+    throw error;
+  }
+}
+
 async function createAppointment(userId, data) {
   //console.log("DEBUG: createAppointment - Incoming Data:", JSON.stringify(data, null, 2));
   const database = client.database(databaseId);
@@ -379,4 +432,4 @@ const cancelAppointment = async (userId, appId, reason, date) => {
 }
 
 
-module.exports = { cancelAppointment, fetchAppointmentsByEmail, fetchAppointmentsByEmails, createAppointment, createBulkAppointments, deleteAppointment, updateAppointment };
+module.exports = { cancelAppointment, fetchAppointmentsByEmail, fetchAppointmentsByEmails, fetchAppointmentsByClinic, createAppointment, createBulkAppointments, deleteAppointment, updateAppointment };
