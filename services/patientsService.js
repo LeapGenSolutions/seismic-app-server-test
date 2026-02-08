@@ -38,15 +38,25 @@ async function generateUniquePatientId(container) {
 
 /* ---------------- READ : ALL PATIENTS ---------------- */
 
-async function fetchAllPatients() {
+async function fetchAllPatients(clinicName) {
   const database = client.database(databaseId);
   const container = database.container("Patients");
 
-  const querySpec = { query: "SELECT c.original_json FROM c" };
+  let querySpec = { query: "SELECT c.original_json, c.clinicName FROM c" };
+
+  if (clinicName) {
+    // Case-insensitive filtering
+    querySpec = {
+      query: "SELECT c.original_json, c.clinicName FROM c WHERE LOWER(c.clinicName) = @clinicName",
+      parameters: [{ name: "@clinicName", value: clinicName.trim().toLowerCase() }]
+    };
+  }
+
   const { resources } = await container.items.query(querySpec).fetchAll();
 
   return resources.map(item => {
     const oj = item.original_json;
+    const itemClinic = item.clinicName;
 
     // ✅ NEW FORMAT
     if (oj?.original_json?.details) {
@@ -54,6 +64,7 @@ async function fetchAllPatients() {
         patient_id: oj.original_json.patient_id,
         practice_id: oj.original_json.practice_id,
         ...oj.original_json.details,
+        clinicName: itemClinic || oj.original_json.details.clinicName
       };
     }
 
@@ -72,6 +83,7 @@ async function fetchAllPatients() {
         email: d.email || "",
         contactmobilephone: d.phone || "",
         ssn: d.ssn || "",
+        clinicName: itemClinic || ""
       };
     }
 
