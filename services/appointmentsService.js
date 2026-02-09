@@ -120,7 +120,7 @@ async function fetchAppointmentsByClinic(clinicName) {
   if (!clinicName) return [];
   const database = client.database(databaseId);
   const seismic_appointments_container = database.container("seismic_appointments");
-  const normalizedClinic = clinicName.trim().toLowerCase();
+  const normalizedClinic = clinicName.replace(/\s+/g, " ").trim().toLowerCase();
 
   try {
     const seismicQuery = {
@@ -152,11 +152,10 @@ async function fetchAppointmentsByClinic(clinicName) {
                   d.clinicName
               FROM c
               JOIN d IN c.data 
-              WHERE 
-                LOWER(d.clinicName) = @clinicName 
-                OR LOWER(d.details.clinicName) = @clinicName 
-                OR LOWER(d.original_json.clinicName) = @clinicName
-                OR LOWER(d.original_json.details.clinicName) = @clinicName`,
+              WHERE LTRIM(RTRIM(LOWER(d.clinicName))) = @clinicName 
+                 OR LTRIM(RTRIM(LOWER(d.details.clinicName))) = @clinicName 
+                 OR LTRIM(RTRIM(LOWER(d.original_json.clinicName))) = @clinicName
+                 OR LTRIM(RTRIM(LOWER(d.original_json.details.clinicName))) = @clinicName`,
       parameters: [{ name: "@clinicName", value: normalizedClinic }]
     };
 
@@ -203,7 +202,8 @@ async function createAppointment(userId, data) {
     appointment_date: data.appointment_date,
     ehr: data.ehr,
     mrn: data.mrn,
-    clinicName: data.clinicName || ""
+    mrn: data.mrn,
+    clinicName: (data.clinicName || "").replace(/\s+/g, " ").trim()
   };
 
   //console.log("DEBUG: createAppointment - Prepared newAppointment:", JSON.stringify(newAppointment, null, 2));
@@ -248,7 +248,7 @@ async function createAppointment(userId, data) {
 const createBulkAppointments = async (file, data) => {
   const blobServiceClient = BlobServiceClient.fromConnectionString(process.env.RECORDINGS_BLOB_CONNECTION_STRING);
   const containerClient = blobServiceClient.getContainerClient("seismic-appointment-uploads");
-  const blobName = `${Date.now()}-${file.originalname}`;
+  const blobName = `${Date.now()} -${file.originalname} `;
   const blockBlobClient = containerClient.getBlockBlobClient(blobName);
   try {
     await blockBlobClient.uploadData(file.buffer);
@@ -362,7 +362,8 @@ const updateAppointment = async (user_id, appointmentId, updatedData) => {
       cancelled_at: undefined,
       cancelled_by: undefined,
       cancelled_reason: undefined,
-      status: "scheduled"
+      status: "scheduled",
+      clinicName: (updatedData.clinicName || currentAppointment.clinicName || "").replace(/\s+/g, " ").trim()
     }
     if (updatedData.appointment_date !== updatedData.original_appointment_date) {
       await deleteAppointment(user_id, appointmentId, updatedData.original_appointment_date);
