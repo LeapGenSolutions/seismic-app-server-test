@@ -51,8 +51,8 @@ async function fetchDoctors(clinicName) {
         let querySpec = { query: `SELECT * from c` };
         if (clinicName) {
             querySpec = {
-                query: `SELECT * from c WHERE LOWER(c.clinicName) = @clinicName`,
-                parameters: [{ name: "@clinicName", value: clinicName.trim().toLowerCase() }]
+                query: `SELECT * from c WHERE LTRIM(RTRIM(LOWER(c.clinicName))) = @clinicName`,
+                parameters: [{ name: "@clinicName", value: clinicName.replace(/\s+/g, " ").trim().toLowerCase() }]
             };
         }
         const { resources: items } = await container.items.query(querySpec).fetchAll();

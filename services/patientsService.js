@@ -47,8 +47,8 @@ async function fetchAllPatients(clinicName) {
   if (clinicName) {
     // Case-insensitive filtering
     querySpec = {
-      query: "SELECT c.original_json, c.clinicName FROM c WHERE LOWER(c.clinicName) = @clinicName",
-      parameters: [{ name: "@clinicName", value: clinicName.trim().toLowerCase() }]
+      query: "SELECT c.original_json, c.clinicName FROM c WHERE LTRIM(RTRIM(LOWER(c.clinicName))) = @clinicName",
+      parameters: [{ name: "@clinicName", value: clinicName.replace(/\s+/g, " ").trim().toLowerCase() }]
     };
   }
 
@@ -146,14 +146,14 @@ async function createPatient(data) {
   const firstName = (data?.firstname || data.first_name || '').toLowerCase().trim();
   const lastName = (data?.lastname || data?.last_name || '').toLowerCase().trim();
   const email = (data?.email || '').toLowerCase().trim();
-  const clinicName = (data?.clinicName || '').trim();
+  const clinicName = (data?.clinicName || '').replace(/\s+/g, " ").trim();
   const existingPatientQuery = {
-    query: "SELECT * FROM c WHERE LOWER(c.original_json.original_json.details.firstname) = @first_name AND LOWER(c.original_json.original_json.details.lastname) = @last_name AND c.original_json.original_json.details.email = @email AND c.clinicName = @clinicName",
+    query: "SELECT * FROM c WHERE LOWER(c.original_json.original_json.details.firstname) = @first_name AND LOWER(c.original_json.original_json.details.lastname) = @last_name AND c.original_json.original_json.details.email = @email AND LTRIM(RTRIM(LOWER(c.clinicName))) = @clinicName",
     parameters: [
       { name: "@first_name", value: firstName },
       { name: "@last_name", value: lastName },
       { name: "@email", value: email },
-      { name: "@clinicName", value: clinicName }
+      { name: "@clinicName", value: clinicName.replace(/\s+/g, " ").trim().toLowerCase() }
     ]
   };
 
@@ -209,7 +209,7 @@ async function createPatient(data) {
           details: updatedDetails
         }
       },
-      clinicName: data?.clinicName || existingPatient?.clinicName || "",
+      clinicName: clinicName || existingPatient?.clinicName || "",
       created_at: existingPatient?.created_at
     }
     const { resource } = await container.items.upsert(updatedPatient);
@@ -269,7 +269,7 @@ async function createPatient(data) {
         }
       }
     },
-    clinicName: data?.clinicName || "",
+    clinicName: clinicName || "",
     created_at: new Date().toISOString(),
   };
 
@@ -324,7 +324,7 @@ async function createPatientSeismic(data) {
       ...data,
       ...data,
       ssn: String(ssn),
-      clinicName: data?.clinicName || "",
+      clinicName: (data?.clinicName || "").replace(/\s+/g, " ").trim(),
     };
     const { resource } = await container.items.upsert(updatedPatient);
     return resource;
@@ -334,7 +334,7 @@ async function createPatientSeismic(data) {
     id,
     ...data,
     ssn: String(ssn),
-    clinicName: data?.clinicName || "",
+    clinicName: (data?.clinicName || "").replace(/\s+/g, " ").trim(),
     created_at: new Date().toISOString(),
   };
 
