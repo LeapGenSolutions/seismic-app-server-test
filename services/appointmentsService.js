@@ -256,7 +256,7 @@ const createBulkAppointments = async (file, data) => {
       "env": "dev",
       "file_name": blobName,
       "doctor_name": data.doctor_name,
-      "doctor_email": data.userId,
+      "doctor_email": data.doctor_email || data.userId,
       "specialization": data.specialization,
       "practice_id": data.practice_id,
       "doctor_id": data.doctor_id
@@ -294,6 +294,7 @@ const getToken = async () => {
 
 const startJob = async (data) => {
   try {
+    console.log("starting job with data: ", data);
     const response = await fetch(`${process.env.DATABRICKS_WORKSPACE_URL}/api/2.1/jobs/run-now`, {
       method: 'POST',
       headers: {
