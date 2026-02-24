@@ -253,7 +253,8 @@ const createBulkAppointments = async (file, data) => {
   try {
     await blockBlobClient.uploadData(file.buffer);
     const resource = await startJob({
-      "env": "dev",
+      // make sure to change the env value to "prod" when deploying to production
+      "env": "test",
       "file_name": blobName,
       "doctor_name": data.doctor_name,
       "doctor_email": data.doctor_email || data.userId,
