@@ -1,6 +1,6 @@
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
-const { config } = require("dotenv");
 const cors = require("cors");
 const {
   fetchEmailFromCallHistory,
@@ -25,9 +25,9 @@ const emotionalConnectRouter = require("./routes/emotionalConnect");
 const postCallFeedbackRouter = require("./routes/postCallFeedback");
 const standaloneRouter = require("./routes/standalone");
 const npiRouter = require("./routes/npi");
+const athenaRouter = require("./routes/athena");
 const { initTelemetry } = require("./services/telemetryService");
 
-config();
 
 const PORT = process.env.PORT || 8080;
 initTelemetry();
@@ -61,7 +61,7 @@ app.use("/api/call-history", callHistoryRouter);
 app.use("/api/doctor-notes", doctorNotesRouter);
 app.use("/api/emotional-connect", emotionalConnectRouter);
 app.use("/api/post-call-feedback", postCallFeedbackRouter);
-
+app.use("/api/athena", athenaRouter);
 
 app.use("/api/standalone", standaloneRouter);
 app.use("/api/verify-npi",npiRouter)
