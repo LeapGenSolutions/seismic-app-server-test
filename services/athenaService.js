@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 async function getToken() {
-const clientId = process.env.ATHENA_CLIENT_ID;
+    const clientId = process.env.ATHENA_CLIENT_ID;
     const clientSecret = process.env.ATHENA_CLIENT_SECRET;
     const basicAuth = Buffer
         .from(`${clientId}:${clientSecret}`)
@@ -204,7 +204,7 @@ async function postAll(practiceId, encounterId, noteText) {
         const assessmentPlanResponse = assessmentPlanMatch ? await putAssessment(practiceId, encounterId, assessmentPlanMatch[1].trim(), token) : null;
         const data = {
             reason: reasonMarchResponse.success,
-            subjective: false,
+            subjective: subjectiveResponse.success,
             ros: rosResponse.success,
             objective: objectiveResponse.success,
             assessmentPlan: assessmentPlanResponse.success
@@ -216,4 +216,4 @@ async function postAll(practiceId, encounterId, noteText) {
 }
 
 
-module.exports = { postVisitReason, putPhysicalExam, putHPI, putReviewOfSystems, putAssessment, postAll};
+module.exports = { postVisitReason, putPhysicalExam, putHPI, putReviewOfSystems, putAssessment, postAll, getToken};
