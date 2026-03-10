@@ -11,7 +11,6 @@ const {
 } = require("../services/athenaService");
 const { trackAppointmentAudit } = require("../services/telemetryService");
 
-
 router.post("/:email/encounters/:appointmentId/visit-reason", async (req, res) => {
   try {
     const { appointmentId } = req.params;
@@ -22,6 +21,7 @@ router.post("/:email/encounters/:appointmentId/visit-reason", async (req, res) =
       appointmentId,
       note
     );
+
     trackAppointmentAudit("soap.audit", {
       action: "post_to_athena",
       status: "success",
@@ -29,7 +29,6 @@ router.post("/:email/encounters/:appointmentId/visit-reason", async (req, res) =
       appointment_id: appointmentId,
       performed_by: req.params.email
     });
-
     res.status(200).json(result);
   } catch (error) {
     trackAppointmentAudit("soap.audit", {
@@ -86,6 +85,7 @@ router.put("/:email/encounters/:appointmentId/hpi", async (req, res) => {
       appointmentId,
       note
     );
+
     trackAppointmentAudit("soap.audit", {
       action: "post_to_athena",
       status: "success",
@@ -117,6 +117,7 @@ router.put("/:email/encounters/:appointmentId/review-of-systems", async (req, re
       appointmentId,
       note
     );
+
     trackAppointmentAudit("soap.audit", {
       action: "post_to_athena",
       status: "success",
@@ -142,12 +143,13 @@ router.put("/:email/encounters/:appointmentId/assessment", async (req, res) => {
   try {
     const { appointmentId } = req.params;
     const { note, practiceID } = req.body;
-    
+
     const result = await putAssessment(
       practiceID,
       appointmentId,
       note
     );
+
     trackAppointmentAudit("soap.audit", {
       action: "post_to_athena",
       status: "success",
@@ -179,6 +181,7 @@ router.post("/:email/encounters/:appointmentId/all", async (req, res) => {
       appointmentId,
       note
     );
+
     trackAppointmentAudit("soap.audit", {
       action: "post_to_athena",
       status: "success",
