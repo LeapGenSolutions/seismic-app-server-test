@@ -610,4 +610,13 @@ const cancelAppointment = async(userId, appId, reason, date, auditMeta = {}) => 
 }
 
 
-module.exports = { cancelAppointment, fetchAppointmentsByEmail, fetchAppointmentsByEmails, createAppointment, createBulkAppointments, deleteAppointment, updateAppointment };
+module.exports = {
+  cancelAppointment,
+  fetchAppointmentsByEmail,
+  fetchAppointmentsByEmails,
+  fetchAppointmentsByClinic,
+  createAppointment,
+  createBulkAppointments,
+  deleteAppointment,
+  updateAppointment
+};
