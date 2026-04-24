@@ -1,8 +1,6 @@
 const { CosmosClient } = require("@azure/cosmos");
 const { BlobServiceClient } = require("@azure/storage-blob");
 const crypto = require("crypto");
-const { start } = require("repl");
-const { blob } = require("stream/consumers");
 const { createPatientBoth } = require("./patientsService");
 const { trackAppointmentAudit } = require("./telemetryService");
 require("dotenv").config();
@@ -610,13 +608,33 @@ const cancelAppointment = async(userId, appId, reason, date, auditMeta = {}) => 
 }
 
 
-module.exports = {
-  cancelAppointment,
-  fetchAppointmentsByEmail,
-  fetchAppointmentsByEmails,
-  fetchAppointmentsByClinic,
-  createAppointment,
-  createBulkAppointments,
-  deleteAppointment,
-  updateAppointment
+const pullAthenaAppointments = async (practiceId, providerId, departmentId) => {
+  try {
+    const response = await fetch(
+      process.env.ATHENA_APPOINTMENTS_URL,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          env: process.env.ATHENA_ENV || "test",
+          LOG_LEVEL: "INFO",
+          practice_id: practiceId,
+          provider_id: providerId,
+          department_id: departmentId,
+        }),
+      }
+    );
+    if (!response.ok) {
+      const errText = await response.text();
+      const error = new Error("Athena appointments pull failed: " + response.status + " " + (errText || response.statusText));
+      error.statusCode = response.status;
+      throw error;
+    }
+    return await response.json();
+  } catch (err) {
+    console.error("Error pulling Athena appointments:", err);
+    throw err;
+  }
 };
+
+module.exports = { cancelAppointment, fetchAppointmentsByEmail, fetchAppointmentsByClinic, fetchAppointmentsByEmails, createAppointment, createBulkAppointments, deleteAppointment, updateAppointment, pullAthenaAppointments };
